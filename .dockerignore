@@ -1,0 +1,14 @@
+.git
+.gitignore
+.github
+.gradle
+.kotlin
+.idea
+**/build
+**/node_modules
+data
+_shots
+local.properties
+*.iml
+*.log
+docs

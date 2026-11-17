@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: knowhub-server
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /healthz
+    envVars:
+      - key: KNOWHUB_DATA_DIR
+        value: /tmp/knowhub-data
+      - key: KNOWHUB_TOKEN_SECRET
+        generateValue: true
+      - key: KNOWHUB_LLM_BASE_URL
+        sync: false
+      - key: KNOWHUB_LLM_API_KEY
+        sync: false
+      - key: KNOWHUB_LLM_MODEL
+        value: deepseek-chat
