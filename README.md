@@ -2,6 +2,12 @@
 
 > 掌典册之故，答众人之询，引原文为据。中文代号「掌故」。
 
+[![CI](https://github.com/xiaoshaguabuzai/KnowHub/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaoshaguabuzai/KnowHub/actions/workflows/ci.yml)
+[![Publish server image](https://github.com/xiaoshaguabuzai/KnowHub/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/xiaoshaguabuzai/KnowHub/actions/workflows/docker-publish.yml)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xiaoshaguabuzai/KnowHub)
+
+仓库：https://github.com/xiaoshaguabuzai/KnowHub
+
 面向三甲医院的「制度知识库 + 可调教 RAG + 院内业务流程」Agent 可运行 MVP：
 内置 36 篇知识内容：28 篇分领域院内制度（医疗 / 药事 / 护理 / 院感 / 医技 / 公卫 / 信息）+ 8 篇患者就医指南，
 Ktor AI 中台 + Compose Multiplatform 客户端（Android / Desktop / Web 同一套 UI），支持**中台 / 直连（API Key）双接入**。
