@@ -1,0 +1,23 @@
+{
+  "name": "KnowHub Server",
+  "image": "mcr.microsoft.com/devcontainers/java:21-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21"
+    }
+  },
+  "postCreateCommand": "chmod +x gradlew",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "KnowHub API",
+      "visibility": "public",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["vscjava.vscode-java-pack"]
+    }
+  }
+}

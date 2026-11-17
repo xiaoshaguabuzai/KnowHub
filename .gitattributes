@@ -1,0 +1,12 @@
+* text=auto
+
+# Shell / container files must stay LF for Linux builds
+gradlew text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf

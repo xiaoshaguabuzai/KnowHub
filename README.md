@@ -195,6 +195,47 @@ docker run -p 8080:8080 \
 - 临时演示：GitHub Codespaces 打开仓库后运行 `./gradlew :server:run`，把 8080 端口设为 Public，即可得到临时公网地址。
 - 服务端 CORS 当前为 `anyHost()`，Web 端可跨域；生产建议收窄到固定域名。
 - 密钥只放在平台环境变量，不要提交 `.env` 或真实 API Key。
+**Render 打不开 / 超时？** 这是网络不可达（`render.com` 在部分网络被限制），不是仓库配置问题。按场景选：
+
+#### A. 同一 WiFi 直连（最快，无需公网）
+
+1. 电脑启动 `.\gradlew.bat :server:run`（已监听 `0.0.0.0:8080`）。
+2. `ipconfig` 查 IPv4，例如 `192.168.0.101`。
+3. 手机与电脑连同一 WiFi，App 登录页「服务端地址」填 `http://192.168.0.101:8080`。
+4. 若手机打不开，用**管理员** PowerShell 放行端口（或临时关闭专用网络防火墙）：
+
+```powershell
+New-NetFirewallRule -DisplayName "KnowHub 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
+```
+
+#### B. GitHub Codespaces（公网、无需新账号）
+
+仓库已包含 `.devcontainer/devcontainer.json`（Java 21、8080 端口公开）：
+
+1. 仓库页 **Code → Codespaces → Create codespace on main**。
+2. 终端运行 `./gradlew :server:run`（首次下载依赖约 2–4 分钟）。
+3. 底部 **Ports** → `8080` → 右键 **Visibility → Public**。
+4. 复制 `https://<codespace>-8080.app.github.dev`，填入 App 服务端地址。
+
+免费额度约 60 核时/月；Codespace 停止后地址失效，适合演示，不适合长期。
+
+#### C. 国内云主机（长期）
+
+阿里云 / 腾讯云轻量 2C2G，安装 JDK 21 或 Docker 后：
+
+```bash
+git clone https://github.com/xiaoshaguabuzai/KnowHub.git
+cd KnowHub
+./gradlew :server:installDist
+KNOWHUB_DATA_DIR=/var/lib/knowhub KNOWHUB_TOKEN_SECRET=change-me \
+  server/build/install/server/bin/server
+```
+
+安全组放行 8080，建议 Nginx + HTTPS；GHCR 在国内可能拉不动，直接在主机上构建更稳。
+
+#### D. 其他容器平台
+
+Railway / Fly.io / Koyeb / Zeabur 都可直接用本仓库的 `Dockerfile`；Render 能访问时一键链接依然可用。
 
 ## 6. 演示账号与脚本
 
