@@ -100,9 +100,9 @@ core（commonMain，全部平台共用）
 | 模式 | 入口 | 能力 | 依赖 |
 | --- | --- | --- | --- |
 | 中台模式 | 登录页「中台模式」；设置里切换 | 院内知识库、流程、附件解析、患者/职工权限 | Ktor 服务（默认 `:8080`） |
-| 直连模式 | 登录页「直连模式」；设置里切换 | 与中台对齐：本地知识库（36 篇）、流程、附件解析、引用、调教、语音；可自选模型 | 手机/桌面可直接访问的 OpenAI 兼容接口 |
+| 直连模式 | 登录页「直连模式」；设置里切换 | 与中台对齐：本地知识库（36 篇）、流程、附件解析、引用、调教、语音；可自选模型 | OpenAI 兼容或 Anthropic 兼容接口 |
 
-直连模式填写 **API Key + 接口地址 + 模型名** 即可开始（默认 `https://api.openai.com/v1`、`gpt-4o-mini`）；
+直连模式填写 **API Key + 接口地址 + 模型名** 即可开始（默认 `https://api.deepseek.com/v1`、`deepseek-chat`）；支持 OpenAI 兼容（`/v1`）与 Anthropic 兼容（`/anthropic`）两种协议，按地址自动识别；
 本地内置 36 篇知识快照、4 条流程、检索/ACL/附件解析与调教样本，患者/职工/医务处/人事科身份可切换。
 API Key 仅保存在本次运行内存；会话与附件也在内存中，重启清空；管理端导入/统计仍以中台为准。
 
@@ -347,7 +347,7 @@ data: {"type":"text","seq":7,"sessionId":"ses_x","messageId":"msg_y","traceId":"
 ```bash
 .\gradlew.bat :core:jvmTest          # 14 项：分词/切块/BM25/ACL/患者可见性/调教/流程引擎/SSE/意图
 .\gradlew.bat :server:test           # 10 项：登录/权限/SSE/ACL 双向/患者视角/流程/导入索引/查看/附件/反馈
-.\gradlew.bat :app:shared:jvmTest     # 8 项：直连 SSE / 本地检索 / 流程 / 附件 / PDF 解析
+.\gradlew.bat :app:shared:jvmTest     # 9 项：直连 SSE（OpenAI/Anthropic）/ 本地检索 / 流程 / 附件 / PDF 解析
 powershell -File scripts/smoke-test.ps1   # 41 项真实 HTTP + SSE 端到端校验
 ```
 

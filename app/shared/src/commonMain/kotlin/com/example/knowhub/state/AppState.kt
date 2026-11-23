@@ -55,8 +55,8 @@ class AppState {
 
     var accessMode by mutableStateOf(AccessMode.PLATFORM)
     var directApiKey by mutableStateOf("")
-    var directBaseUrl by mutableStateOf("https://api.openai.com/v1")
-    var directModel by mutableStateOf("gpt-4o-mini")
+    var directBaseUrl by mutableStateOf("https://api.deepseek.com/v1")
+    var directModel by mutableStateOf("deepseek-chat")
     var loginStartDirect by mutableStateOf(false)
     var localRole by mutableStateOf(Roles.MEMBER)
 

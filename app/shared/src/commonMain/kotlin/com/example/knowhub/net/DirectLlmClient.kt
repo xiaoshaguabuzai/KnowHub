@@ -13,6 +13,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.addJsonObject
@@ -25,8 +26,11 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 /**
- * 直连模式：客户端直接用 API Key 调 OpenAI 兼容的 /chat/completions（SSE 流式）。
- * 不经过 Ktor 中台，因此没有院内知识库、流程与附件的服务端能力。
+ * 直连模式模型客户端，支持两种协议：
+ * - OpenAI 兼容：`{base}/chat/completions`（OpenAI、DeepSeek /v1、Qwen、Kimi 等）
+ * - Anthropic 兼容：`{base}/v1/messages`（Claude、DeepSeek /anthropic）
+ *
+ * 通过接口地址自动识别：包含 `/anthropic` 即走 Anthropic Messages 协议。
  */
 class DirectLlmClient(
     private val http: HttpClient,
@@ -34,9 +38,16 @@ class DirectLlmClient(
     private val baseUrl: String,
     private val model: String,
 ) {
+    private val anthropic: Boolean = baseUrl.contains("/anthropic", ignoreCase = true)
+
     fun stream(history: List<Pair<String, String>>): Flow<String> = flow {
+        if (anthropic) streamAnthropic(history) else streamOpenAi(history)
+    }
+
+    private suspend fun FlowCollector<String>.streamOpenAi(history: List<Pair<String, String>>) {
         require(apiKey.isNotBlank()) { "API Key 不能为空" }
-        val endpoint = baseUrl.trim().trimEnd('/') + "/chat/completions"
+        val base = baseUrl.trim().trimEnd('/')
+        val endpoint = if (base.endsWith("/chat/completions")) base else "$base/chat/completions"
         val payload = buildJsonObject {
             put("model", model)
             put("stream", true)
@@ -75,6 +86,65 @@ class DirectLlmClient(
                         ?.jsonPrimitive?.contentOrNull
                 }.getOrNull()
                 if (!delta.isNullOrEmpty()) emit(delta)
+            }
+        }
+    }
+
+    private suspend fun FlowCollector<String>.streamAnthropic(history: List<Pair<String, String>>) {
+        require(apiKey.isNotBlank()) { "API Key 不能为空" }
+        val base = baseUrl.trim().trimEnd('/')
+        val endpoint = if (base.endsWith("/v1/messages")) base else "$base/v1/messages"
+        val system = history.firstOrNull { it.first == "system" }?.second
+        val messages = history.filter { it.first == "user" || it.first == "assistant" }
+
+        val payload = buildJsonObject {
+            put("model", model)
+            put("max_tokens", 4096)
+            put("stream", true)
+            if (!system.isNullOrBlank()) put("system", system)
+            putJsonArray("messages") {
+                messages.forEach { (role, content) ->
+                    addJsonObject {
+                        put("role", role)
+                        put("content", content)
+                    }
+                }
+            }
+        }
+
+        http.preparePost(endpoint) {
+            header("x-api-key", apiKey.trim())
+            header("anthropic-version", "2023-06-01")
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Text.EventStream)
+            setBody(payload.toString())
+        }.execute { response ->
+            if (!response.status.isSuccess()) {
+                val detail = runCatching { response.bodyAsText() }.getOrDefault("")
+                throw IllegalStateException("直连模型失败（HTTP ${response.status.value}）：${detail.take(240)}")
+            }
+            val channel = response.bodyAsChannel()
+            while (true) {
+                val line = channel.readUTF8Line() ?: break
+                val trimmed = line.trim()
+                if (!trimmed.startsWith("data:")) continue
+                val data = trimmed.removePrefix("data:").trim()
+                if (data == "[DONE]") break
+                val element = runCatching { Json.parseToJsonElement(data).jsonObject }.getOrNull() ?: continue
+                when (element["type"]?.jsonPrimitive?.contentOrNull) {
+                    "message_stop" -> break
+                    "error" -> {
+                        val message = element["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+                            ?: "模型返回错误"
+                        throw IllegalStateException("直连模型失败：$message")
+                    }
+                    "content_block_delta" -> {
+                        val delta = element["delta"]?.jsonObject
+                        if (delta?.get("type")?.jsonPrimitive?.contentOrNull == "text_delta") {
+                            delta["text"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { emit(it) }
+                        }
+                    }
+                }
             }
         }
     }

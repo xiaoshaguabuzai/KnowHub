@@ -43,4 +43,38 @@ class DirectLlmClientTest {
             server.stop(0)
         }
     }
+
+    @Test
+    fun parsesAnthropicCompatibleSseDeltas() = runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/anthropic/v1/messages") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { out ->
+                out.write("""data: {"type":"message_start","message":{"id":"m1"}}""" .plus("\n\n").toByteArray())
+                out.write("""data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"思考中"}}""" .plus("\n\n").toByteArray())
+                listOf("你好", "，", "直连").forEach { text ->
+                    out.write("""data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"$text"}}""" .plus("\n\n").toByteArray())
+                    out.flush()
+                }
+                out.write("""data: {"type":"message_stop"}""" .plus("\n\n").toByteArray())
+                out.flush()
+            }
+        }
+        server.start()
+        val client = HttpClient(OkHttp)
+        try {
+            val direct = DirectLlmClient(
+                http = client,
+                apiKey = "test-key",
+                baseUrl = "http://127.0.0.1:${server.address.port}/anthropic",
+                model = "mock",
+            )
+            val chunks = direct.stream(listOf("system" to "sys", "user" to "hi")).toList()
+            assertEquals("你好，直连", chunks.joinToString(""))
+        } finally {
+            client.close()
+            server.stop(0)
+        }
+    }
 }

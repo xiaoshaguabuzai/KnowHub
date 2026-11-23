@@ -416,7 +416,7 @@ private fun DirectLoginForm(state: AppState) {
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
         supportingText = {
-            Text("OpenAI 兼容地址，例如 https://api.openai.com/v1", fontSize = 10.5.sp, color = Faint)
+            Text("OpenAI 兼容（…/v1）或 Anthropic（…/anthropic），自动识别", fontSize = 10.5.sp, color = Faint)
         },
     )
 
@@ -429,7 +429,7 @@ private fun DirectLoginForm(state: AppState) {
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
         supportingText = {
-            Text("例如 gpt-4o-mini、qwen-plus、deepseek-chat", fontSize = 10.5.sp, color = Faint)
+            Text("例如 deepseek-chat、deepseek-flash、gpt-4o-mini", fontSize = 10.5.sp, color = Faint)
         },
     )
 
