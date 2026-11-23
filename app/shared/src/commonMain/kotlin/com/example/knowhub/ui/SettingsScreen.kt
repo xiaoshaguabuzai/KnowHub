@@ -47,7 +47,7 @@ fun SettingsScreen(state: AppState, scope: CoroutineScope) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (state.isDirect) {
-            DirectModeCard(state)
+            DirectModeCard(state, scope)
             DirectConfigCard(state)
             AboutCard(state)
         } else {
@@ -82,19 +82,39 @@ private fun AccessModeCard(state: AppState) {
 }
 
 @Composable
-private fun DirectModeCard(state: AppState) {
+private fun DirectModeCard(state: AppState, scope: CoroutineScope) {
     SurfaceCard {
-        SectionHeader("接入方式", "直连模式 · 不依赖中台")
+        SectionHeader("接入方式", "直连模式 · 本地知识库 + 你的模型")
         Spacer(Modifier.height(8.dp))
         Text("当前模型：${state.directModel}", style = MaterialTheme.typography.bodySmall, color = Ink)
         Text("接口：${state.directBaseUrl}", style = MaterialTheme.typography.labelSmall, color = Muted)
-        Spacer(Modifier.height(4.dp))
         Text(
-            "直连模式只提供对话，不含院内知识库、流程与附件解析。",
+            "本地知识库：${state.workspace.documents.size} 篇 / ${state.workspace.chunks.size} 个片段",
             style = MaterialTheme.typography.labelSmall,
             color = Muted,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+        Text("演示身份", style = MaterialTheme.typography.labelSmall, color = Muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(
+                com.example.knowhub.core.model.Roles.PATIENT to "患者",
+                com.example.knowhub.core.model.Roles.MEMBER to "医师",
+                com.example.knowhub.core.model.Roles.ADMIN to "医务处",
+                com.example.knowhub.core.model.Roles.HR to "人事科",
+            ).forEach { (role, label) ->
+                TextButton(onClick = {
+                    state.localRole = role
+                    state.loadKnowledge(scope)
+                }) {
+                    Text(
+                        label,
+                        fontSize = 10.5.sp,
+                        color = if (state.localRole == role) Brand else Muted,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
         OutlinedButton(
             onClick = { state.switchToPlatformLogin() },
             modifier = Modifier.fillMaxWidth(),

@@ -106,7 +106,7 @@ private fun AppHeader(
                         Text("KnowHub", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Ink)
                         Text(
                             when {
-                                state.isDirect -> "直连模式 · 不含院内知识库"
+                                state.isDirect -> "直连模式 · 本地知识库"
                                 state.isPatient -> "就医指南 · 挂号检查住院"
                                 else -> "医院知识中枢 · 引原文为据"
                             },
@@ -216,8 +216,7 @@ private fun BottomNav(state: AppState) {
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                val tabs = if (state.isDirect) listOf(Tab.CHAT, Tab.SETTINGS) else Tab.entries
-                tabs.forEach { tab ->
+                Tab.entries.forEach { tab ->
                     val selected = state.tab == tab
                     Column(
                         modifier = Modifier

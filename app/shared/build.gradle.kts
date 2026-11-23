@@ -55,6 +55,7 @@ kotlin {
             implementation(libs.ktor.clientOkhttp)
             implementation(libs.androidx.activity.compose)
             implementation(libs.mlkit.textChinese)
+            implementation(libs.pdfboxAndroid)
         }
         commonMain.dependencies {
             api(project(":core"))
@@ -80,6 +81,7 @@ kotlin {
         }
         jvmMain.dependencies {
             implementation(libs.ktor.clientOkhttp)
+            implementation(libs.pdfbox)
         }
         jsMain.dependencies {
             implementation(libs.wrappers.browser)

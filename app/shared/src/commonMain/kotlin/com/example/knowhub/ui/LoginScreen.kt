@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.knowhub.core.model.Roles
 import com.example.knowhub.state.AppState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -321,6 +322,24 @@ private fun QuickLogin(
 }
 
 @Composable
+private fun RolePill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (selected) BrandSoft else Color(0xFFF2F4F7))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        Text(
+            label,
+            fontSize = 11.sp,
+            color = if (selected) Brand else Muted,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+        )
+    }
+}
+
+@Composable
 private fun RowScope.ModeTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
@@ -345,6 +364,20 @@ private fun DirectLoginForm(state: AppState) {
     var keyVisible by remember { mutableStateOf(false) }
     var touched by remember { mutableStateOf(false) }
     val keyMissing = touched && state.directApiKey.isBlank()
+
+    Text("演示身份（决定可见的指南 / 制度）", style = MaterialTheme.typography.labelSmall, color = Muted)
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(
+            Roles.PATIENT to "患者",
+            Roles.MEMBER to "医师",
+            Roles.ADMIN to "医务处",
+            Roles.HR to "人事科",
+        ).forEach { (role, label) ->
+            RolePill(label, state.localRole == role) { state.localRole = role }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
 
     OutlinedTextField(
         value = state.directApiKey,
@@ -429,7 +462,7 @@ private fun DirectLoginForm(state: AppState) {
     }
     Spacer(Modifier.height(10.dp))
     Text(
-        "直连模式只提供对话，不含院内知识库、流程与附件解析；可随时在设置切回中台。",
+        "本地已内置与中台一致的 36 篇知识、4 条流程与附件解析；API Key 仅保存在本次运行，可随时在设置切回中台。",
         style = MaterialTheme.typography.labelSmall,
         color = Muted,
     )

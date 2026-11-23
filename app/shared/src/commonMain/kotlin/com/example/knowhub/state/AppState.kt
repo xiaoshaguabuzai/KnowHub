@@ -22,6 +22,11 @@ import com.example.knowhub.core.model.UserDto
 import com.example.knowhub.core.model.Roles
 import com.example.knowhub.core.util.newId
 import com.example.knowhub.input.PickedAttachment
+import com.example.knowhub.local.LocalAgent
+import com.example.knowhub.local.LocalAttachment
+import com.example.knowhub.local.LocalWorkspace
+import com.example.knowhub.local.localNow
+import com.example.knowhub.local.parseLocalAttachmentText
 import com.example.knowhub.net.KnowHubClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +58,13 @@ class AppState {
     var directBaseUrl by mutableStateOf("https://api.openai.com/v1")
     var directModel by mutableStateOf("gpt-4o-mini")
     var loginStartDirect by mutableStateOf(false)
+    var localRole by mutableStateOf(Roles.MEMBER)
+
+    /** 直连模式的本地知识库/会话工作区，按需初始化。 */
+    val workspace by lazy { LocalWorkspace() }
+    var localAttachmentTexts by mutableStateOf<Map<String, String>>(emptyMap())
+
+    val localUser: UserDto get() = workspace.userFor(localRole)
 
     val isDirect: Boolean get() = accessMode == AccessMode.DIRECT
 
@@ -109,9 +121,10 @@ class AppState {
 
     private var streamJob: Job? = null
 
-    val isAdmin: Boolean get() = user?.roles?.contains(Roles.ADMIN) == true
-    val isPatient: Boolean get() = user?.roles?.contains(Roles.PATIENT) == true
-    val isStaff: Boolean get() = user != null && !isPatient
+    val isAdmin: Boolean get() = !isDirect && user?.roles?.contains(Roles.ADMIN) == true
+    val isPatient: Boolean get() =
+        if (isDirect) localRole == Roles.PATIENT else user?.roles?.contains(Roles.PATIENT) == true
+    val isStaff: Boolean get() = if (isDirect) !isPatient else user != null && !isPatient
 
     val currentSession: SessionDto? get() = sessions.firstOrNull { it.sessionId == currentSessionId }
 
@@ -158,17 +171,22 @@ class AppState {
         loginStartDirect = false
         token = null
         user = null
-        sessions = emptyList()
-        currentSessionId = "direct"
-        messages = emptyList()
+        val session = workspace.sessions().firstOrNull() ?: workspace.newSession()
+        currentSessionId = session.sessionId
+        sessions = workspace.sessions().map { it.toDto(workspace.flows) }
+        messages = session.messages.map { it.toDto(session.sessionId) }
         streamText = ""
         streamSources = emptyList()
         flowSteps = emptyList()
         streaming = false
         error = null
         loginError = null
+        documents = workspace.visibleDocuments(localUser)
+        flows = workspace.visibleFlows(localUser)
+        rag = workspace.rag
+        stats = workspace.stats()
         tab = Tab.CHAT
-        info = "直连模式：直接调用你配置的模型，不含院内知识库；可在设置切回中台"
+        info = "直连模式：本地知识库 + 你配置的模型；会话与附件仅保存在本次运行"
     }
 
     /** 从中台切到直连登录页（保留已填的 Key）。 */
@@ -230,12 +248,18 @@ class AppState {
     }
 
     suspend fun refreshSessions() {
+        if (isDirect) {
+            sessions = workspace.sessions().map { it.toDto(workspace.flows) }
+            return
+        }
         sessions = client.sessions()
     }
 
     fun createSession(scope: CoroutineScope) {
         if (isDirect) {
-            currentSessionId = "direct"
+            val session = workspace.newSession()
+            currentSessionId = session.sessionId
+            sessions = workspace.sessions().map { it.toDto(workspace.flows) }
             messages = emptyList()
             streamText = ""
             streamSources = emptyList()
@@ -263,6 +287,13 @@ class AppState {
     fun openSession(scope: CoroutineScope, sessionId: String) {
         currentSessionId = sessionId
         error = null
+        if (isDirect) {
+            messages = workspace.session(sessionId)?.messages?.map { it.toDto(sessionId) }.orEmpty()
+            streamText = ""
+            streamSources = emptyList()
+            flowSteps = emptyList()
+            return
+        }
         scope.launch {
             try {
                 messages = client.messages(sessionId)
@@ -276,6 +307,15 @@ class AppState {
     }
 
     fun deleteSession(scope: CoroutineScope, sessionId: String) {
+        if (isDirect) {
+            workspace.deleteSession(sessionId)
+            sessions = workspace.sessions().map { it.toDto(workspace.flows) }
+            if (currentSessionId == sessionId) {
+                val next = sessions.firstOrNull()
+                if (next != null) openSession(scope, next.sessionId) else createSession(scope)
+            }
+            return
+        }
         scope.launch {
             try {
                 client.deleteSession(sessionId)
@@ -357,61 +397,77 @@ class AppState {
     }
 
     private fun directSend(scope: CoroutineScope, text: String) {
-        val content = text.trim()
-        if (content.isEmpty() || streaming) return
+        val attachmentsToSend = pendingAttachments
+        val base = text.trim()
+        if ((base.isEmpty() && attachmentsToSend.isEmpty()) || streaming) return
+
+        val sessionId = currentSessionId ?: workspace.newSession().sessionId.also { currentSessionId = it }
+        val content = base.ifEmpty { "请解读我上传的附件。" }
+        val displayContent = if (attachmentsToSend.isEmpty()) {
+            content
+        } else {
+            content + "\n\n📎 " + attachmentsToSend.joinToString("、") { it.name }
+        }
+
+        workspace.appendMessage(sessionId, MessageRoles.USER, displayContent)
+        messages = workspace.session(sessionId)?.messages?.map { it.toDto(sessionId) }.orEmpty()
+        sessions = workspace.sessions().map { it.toDto(workspace.flows) }
+
+        val localAttachments = attachmentsToSend.mapNotNull { dto ->
+            localAttachmentTexts[dto.attachmentId]?.let { LocalAttachment(dto, it) }
+        }
+        localAttachmentTexts = localAttachmentTexts - attachmentsToSend.map { it.attachmentId }.toSet()
+        pendingAttachments = emptyList()
+
         error = null
         info = null
-        messages = messages + MessageDto(
-            messageId = newId("direct"),
-            sessionId = "direct",
-            role = MessageRoles.USER,
-            content = content,
-        )
         streaming = true
         streamText = ""
         streamSources = emptyList()
         flowSteps = emptyList()
 
+        val agent = LocalAgent(workspace) { turns ->
+            client.streamDirect(
+                directApiKey,
+                directBaseUrl,
+                directModel,
+                turns.map { it.role to it.content },
+            )
+        }
+
         streamJob = scope.launch {
             try {
-                val system =
-                    "你是 KnowHub 医院助手（直连模式）。用简体中文回答；不做诊断、不推荐处方；涉及具体病情建议及时就医；不要编造院内制度与流程。"
-                val history = buildList {
-                    add("system" to system)
-                    addAll(
-                        messages
-                            .filter { it.role == MessageRoles.USER || it.role == MessageRoles.ASSISTANT }
-                            .takeLast(12)
-                            .map { it.role to it.content }
-                    )
-                }
-                client.streamDirect(directApiKey, directBaseUrl, directModel, history).collect { delta ->
-                    streamText += delta
-                }
-                finishDirect()
+                agent.respond(
+                    sessionId = sessionId,
+                    user = localUser,
+                    text = content,
+                    attachments = localAttachments,
+                    onDelta = { streamText += it },
+                    onSources = { streamSources = it },
+                    onStep = { flowSteps = flowSteps + it },
+                )
             } catch (e: CancellationException) {
-                finishDirect()
+                if (streamText.isNotBlank()) {
+                    workspace.appendMessage(sessionId, MessageRoles.ASSISTANT, streamText.trim(), streamSources)
+                }
             } catch (e: Exception) {
                 error = e.message ?: "直连模型请求失败，请检查 API Key 与模型地址"
-                finishDirect()
+                if (streamText.isNotBlank()) {
+                    workspace.appendMessage(sessionId, MessageRoles.ASSISTANT, streamText.trim(), streamSources)
+                }
             } finally {
+                messages = workspace.session(sessionId)?.messages?.map { it.toDto(sessionId) } ?: messages
+                sessions = workspace.sessions().map { it.toDto(workspace.flows) }
+                documents = workspace.visibleDocuments(localUser)
+                flows = workspace.visibleFlows(localUser)
+                stats = workspace.stats()
+                streamText = ""
+                streamSources = emptyList()
+                flowSteps = emptyList()
                 streaming = false
             }
         }
     }
-
-    private fun finishDirect() {
-        val content = streamText.trim()
-        if (content.isEmpty()) return
-        messages = messages + MessageDto(
-            messageId = newId("direct"),
-            sessionId = "direct",
-            role = MessageRoles.ASSISTANT,
-            content = content,
-        )
-        streamText = ""
-    }
-
     private fun finishStream(sessionId: String, messageId: String?) {
         if (streamText.isBlank() && streamSources.isEmpty()) return
         messages = messages + MessageDto(
@@ -427,6 +483,12 @@ class AppState {
     }
 
     fun stopStream() {
+        if (isDirect) {
+            streamJob?.cancel()
+            streamJob = null
+            streaming = false
+            return
+        }
         streamJob?.cancel()
         streamJob = null
         streaming = false
@@ -436,6 +498,16 @@ class AppState {
     }
 
     fun submitFeedback(scope: CoroutineScope, messageId: String, rating: String, chunkId: String?) {
+        if (isDirect) {
+            val positive = rating == "up"
+            workspace.rate(messageId, if (positive) 1 else -1)
+            val session = currentSessionId?.let { workspace.session(it) }
+            val query = session?.messages?.lastOrNull { it.role == MessageRoles.USER }?.content.orEmpty()
+            if (!chunkId.isNullOrBlank()) workspace.addTuneSample(query, chunkId, positive)
+            messages = session?.messages?.map { it.toDto(session.sessionId) } ?: messages
+            info = if (positive) "已记录正向样本，后续召回会优先参考" else "已记录负向样本，后续召回会降权"
+            return
+        }
         scope.launch {
             try {
                 client.feedback(messageId, rating, chunkId)
@@ -454,6 +526,37 @@ class AppState {
     /** 上传文件/照片：服务端抽取正文，成功后挂在待发送区。 */
     fun uploadPickedAttachment(scope: CoroutineScope, picked: PickedAttachment) {
         if (attachmentBusy) return
+        if (isDirect) {
+            attachmentBusy = true
+            error = null
+            scope.launch {
+                try {
+                    val text = parseLocalAttachmentText(picked.name, picked.mime, picked.bytes)
+                    val dto = AttachmentDto(
+                        attachmentId = newId("att"),
+                        name = picked.name,
+                        mime = picked.mime,
+                        sizeBytes = picked.bytes.size.toLong(),
+                        chars = text.length,
+                        preview = text.take(160),
+                        hasText = text.isNotBlank(),
+                        createdAt = localNow(),
+                    )
+                    localAttachmentTexts = localAttachmentTexts + (dto.attachmentId to text)
+                    pendingAttachments = pendingAttachments + dto
+                    info = if (dto.hasText) {
+                        "已在本地解析《${dto.name}》共 ${dto.chars} 字，发送后一并作为回答依据"
+                    } else {
+                        "已添加《${dto.name}》（图片），文字识别结果会填入输入框"
+                    }
+                } catch (e: Exception) {
+                    error = e.message ?: "附件解析失败"
+                } finally {
+                    attachmentBusy = false
+                }
+            }
+            return
+        }
         attachmentBusy = true
         error = null
         scope.launch {
@@ -484,6 +587,13 @@ class AppState {
     // ------------------------------------------------------------ 知识库 / 管理
 
     fun loadKnowledge(scope: CoroutineScope) {
+        if (isDirect) {
+            documents = workspace.visibleDocuments(localUser)
+            flows = workspace.visibleFlows(localUser)
+            stats = workspace.stats()
+            rag = workspace.rag
+            return
+        }
         if (knowledgeBusy) return
         knowledgeBusy = true
         scope.launch {
@@ -552,6 +662,13 @@ class AppState {
 
     /** 打开文档阅读器：拉取原文（服务端已做 ACL 校验）。 */
     fun openDocument(scope: CoroutineScope, doc: DocumentDto) {
+        if (isDirect) {
+            viewingDoc = doc
+            docDetail = workspace.documentDetail(doc.docId)
+            docViewError = if (docDetail == null) "该文档不在本地知识库中" else null
+            docLoading = false
+            return
+        }
         viewingDoc = doc
         docDetail = null
         docViewError = null
@@ -598,6 +715,10 @@ class AppState {
         }
 
     fun checkHealth(scope: CoroutineScope) {
+        if (isDirect) {
+            info = "直连模式使用本地知识库，无需连接服务端"
+            return
+        }
         scope.launch {
             try {
                 client.baseUrl = serverUrl

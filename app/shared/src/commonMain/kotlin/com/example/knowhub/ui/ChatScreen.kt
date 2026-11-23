@@ -222,17 +222,13 @@ private fun EmptyChatHero(isPatient: Boolean, isDirect: Boolean, onPick: (String
             Spacer(Modifier.width(11.dp))
             Column {
                 Text(
-                    when {
-                        isDirect -> "直接问大模型"
-                        isPatient -> "把就医流程问明白"
-                        else -> "把医院制度问明白"
-                    },
+                    if (isPatient) "把就医流程问明白" else "把医院制度问明白",
                     style = MaterialTheme.typography.titleLarge,
                     color = Ink,
                 )
                 Text(
                     when {
-                        isDirect -> "直连模式 · 不依赖中台"
+                        isDirect -> "直连模式 · 本地知识库 + 你的模型"
                         isPatient -> "挂号 · 检查 · 住院 · 报销"
                         else -> "查制度 · 走流程 · 看原文，答必有据"
                     },
@@ -245,14 +241,14 @@ private fun EmptyChatHero(isPatient: Boolean, isDirect: Boolean, onPick: (String
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CapabilityCard(
                 glyph = Glyph.Book,
-                title = if (isDirect) "通用问答" else if (isPatient) "查指南" else "查制度",
-                desc = if (isDirect) "医学常识 · 健康解释" else if (isPatient) "挂号 · 检查 · 医保" else "门诊 · 住院 · 核心制度",
+                title = if (isPatient) "查指南" else "查制度",
+                desc = if (isPatient) "挂号 · 检查 · 医保" else "门诊 · 住院 · 核心制度",
                 modifier = Modifier.weight(1f),
             )
             CapabilityCard(
                 glyph = Glyph.Chat,
-                title = if (isDirect) "多轮对话" else if (isPatient) "约门诊" else "走流程",
-                desc = if (isDirect) "上下文连续" else if (isPatient) "科室 · 日期 · 手机号" else "住院登记 · 危急值",
+                title = if (isPatient) "约门诊" else "走流程",
+                desc = if (isPatient) "科室 · 日期 · 手机号" else "住院登记 · 危急值",
                 modifier = Modifier.weight(1f),
             )
         }
@@ -260,14 +256,14 @@ private fun EmptyChatHero(isPatient: Boolean, isDirect: Boolean, onPick: (String
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CapabilityCard(
                 glyph = Glyph.Doc,
-                title = if (isDirect) "语音输入" else "看报告",
-                desc = if (isDirect) "麦克风转文字" else if (isPatient) "拍检验单问含义" else "引用可打开原文",
+                title = "看报告",
+                desc = if (isPatient) "拍检验单问含义" else "引用可打开原文",
                 modifier = Modifier.weight(1f),
             )
             CapabilityCard(
                 glyph = Glyph.Sparkle,
-                title = if (isDirect) "可切换" else if (isPatient) "可追问" else "可调教",
-                desc = if (isDirect) "设置中切回中台" else if (isPatient) "费用 · 复诊 · 投诉" else "反馈影响召回",
+                title = if (isPatient) "可追问" else "可调教",
+                desc = if (isPatient) "费用 · 复诊 · 投诉" else "反馈影响召回",
                 modifier = Modifier.weight(1f),
             )
         }
@@ -275,11 +271,7 @@ private fun EmptyChatHero(isPatient: Boolean, isDirect: Boolean, onPick: (String
         Text("试试这样问", style = MaterialTheme.typography.labelMedium, color = Muted)
         Spacer(Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            (when {
-                isDirect -> directSuggestions
-                isPatient -> patientSuggestions
-                else -> staffSuggestions
-            }).forEach { text ->
+            (if (isPatient) patientSuggestions else staffSuggestions).forEach { text ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -651,16 +643,14 @@ private fun Composer(state: AppState, scope: CoroutineScope) {
                     .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                if (!state.isDirect) {
-                    IconAction(
-                        glyph = Glyph.Plus,
-                        onClick = { showAttachSheet = true },
-                        tint = Ink,
-                        background = Color(0xFFF2F4F7),
-                        modifier = Modifier.size(38.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
+                IconAction(
+                    glyph = Glyph.Plus,
+                    onClick = { showAttachSheet = true },
+                    tint = Ink,
+                    background = Color(0xFFF2F4F7),
+                    modifier = Modifier.size(38.dp),
+                )
+                Spacer(Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -689,11 +679,7 @@ private fun Composer(state: AppState, scope: CoroutineScope) {
                             Box {
                                 if (draft.isEmpty()) {
                                     Text(
-                                        when {
-                                            state.isDirect -> "直接问模型，支持语音"
-                                            state.isPatient -> "问就医流程，或传报告"
-                                            else -> "问制度，或传文件"
-                                        },
+                                        if (state.isPatient) "问就医流程，或传报告" else "问制度，或传文件",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Faint,
                                     )

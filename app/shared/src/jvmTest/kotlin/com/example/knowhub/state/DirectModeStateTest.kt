@@ -38,15 +38,15 @@ class DirectModeStateTest {
             assertTrue(state.isDirect)
             assertTrue(state.loggedIn)
             assertNull(state.token)
-            assertEquals("direct", state.currentSessionId)
+            assertTrue(state.currentSessionId?.startsWith("local") == true, "应创建本地会话")
 
-            state.send(this, "你好")
+            state.send(this, "抽血前能吃饭吗？")
             withTimeout(8_000) {
                 while (state.streaming) delay(20)
             }
 
             assertEquals(2, state.messages.size, "应有一条用户消息与一条助手消息")
-            assertEquals("你好", state.messages.first().content)
+            assertEquals("抽血前能吃饭吗？", state.messages.first().content)
             assertEquals("直连回答成功", state.messages.last().content)
         } finally {
             server.stop(0)
