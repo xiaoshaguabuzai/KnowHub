@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.knowhub.core.model.Roles
 import com.example.knowhub.state.AppState
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -94,7 +95,7 @@ fun LoginScreen(state: AppState, scope: CoroutineScope) {
 
     LaunchedEffect(state.serverUrl) {
         serverOk = null
-        delay(350)
+        delay(350.milliseconds)
         state.client.baseUrl = state.serverUrl.trim().trimEnd('/')
         serverOk = runCatching { state.client.health() }.isSuccess
     }
@@ -153,7 +154,7 @@ fun LoginScreen(state: AppState, scope: CoroutineScope) {
                     keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
                     supportingText = {
                         Text(
-                            if (showUsernameProblem) usernameProblem ?: "" else "支持字母、数字、下划线或中文",
+                            if (showUsernameProblem) usernameProblem else "支持字母、数字、下划线或中文",
                             fontSize = 10.5.sp,
                             color = if (showUsernameProblem) Danger else Faint,
                         )
@@ -184,7 +185,7 @@ fun LoginScreen(state: AppState, scope: CoroutineScope) {
                     },
                     supportingText = {
                         Text(
-                            if (showPasswordProblem) passwordProblem ?: "" else "至少 6 位，需同时包含字母与数字",
+                            if (showPasswordProblem) passwordProblem else "至少 6 位，需同时包含字母与数字",
                             fontSize = 10.5.sp,
                             color = if (showPasswordProblem) Danger else Faint,
                         )
@@ -254,10 +255,10 @@ fun LoginScreen(state: AppState, scope: CoroutineScope) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickLogin("患者", "patient", "patient1234", state, scope, Modifier.weight(1f)) { submit() }
-                    QuickLogin("医师", "demo", "demo1234", state, scope, Modifier.weight(1f)) { submit() }
-                    QuickLogin("医务处", "admin", "admin1234", state, scope, Modifier.weight(1f)) { submit() }
-                    QuickLogin("人事科", "hr", "hr1234", state, scope, Modifier.weight(1f)) { submit() }
+                    QuickLogin("患者", "patient", "patient1234", state, Modifier.weight(1f)) { submit() }
+                    QuickLogin("医师", "demo", "demo1234", state, Modifier.weight(1f)) { submit() }
+                    QuickLogin("医务处", "admin", "admin1234", state, Modifier.weight(1f)) { submit() }
+                    QuickLogin("人事科", "hr", "hr1234", state, Modifier.weight(1f)) { submit() }
                 }
                 }
             }
@@ -302,7 +303,6 @@ private fun QuickLogin(
     username: String,
     password: String,
     state: AppState,
-    scope: CoroutineScope,
     modifier: Modifier = Modifier,
     onSubmit: () -> Unit,
 ) {
@@ -468,4 +468,4 @@ private fun DirectLoginForm(state: AppState) {
     )
 }
 
-private fun roleLabelOf(role: String): String = role
+
